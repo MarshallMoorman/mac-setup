@@ -204,6 +204,29 @@ ensure_jenv_version_dir() {
     fi
 }
 
+# Creating NuGet configuration file
+create_nuget_config() {
+    mkdir -p "$HOME/.nuget/NuGet"
+    
+    local nuget_config_file="$HOME/.nuget/NuGet/NuGet.config"
+    if [ ! -f "$nuget_config_file" ]; then
+        echo "Creating NuGet configuration file..."
+        cat << EOF > "$nuget_config_file"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="Elevate" value="https://pkgs.dev.azure.com/elevate-apps/Elevate/_packaging/Elevate/nuget/v3/index.json" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+  </packageSources>
+</configuration>
+EOF
+        echo "NuGet configuration file created at $nuget_config_file"
+    else
+        echo "NuGet configuration file already exists at $nuget_config_file"
+    fi
+}
+
 reload_profile() {
     # Reload the profile
     source "$profile_file"
@@ -249,7 +272,7 @@ echo "Installing Android Platform Tools..."
 brew install android-platform-tools
 
 echo "Installing asdf..."
-brew install asdf
+brew install asdf@0.16.0
 
 # Update profile for asdf
 update_profile_for_asdf
@@ -352,6 +375,9 @@ update_profile_for_dotnet
 
 # Reload the profile at the end
 reload_profile
+
+# Add this function call after installing .NET and setting up the PATH
+create_nuget_config
 
 echo "Reload your profile with the following command..."
 echo "source $profile_file"
