@@ -71,7 +71,7 @@ update_profile_for_jenv() {
         if [ -f "$jenv_completion_file" ]; then
             echo "source \"$jenv_completion_file\"" >> "$profile_file"
         else
-            echo "Warning: JEnv completions not found. Manual setup might be required." >> "$profile_file"
+            echo "Warning: JEnv completions not found. Manual setup might be required."
         fi
         
         echo 'jenv rehash 2>/dev/null' >> "$profile_file"
@@ -300,6 +300,9 @@ arch_name="$(uname -m)"
 
 # Load the profile variables
 manage_profile
+sudo chown -R mmoorman /usr/local/share/zsh /usr/local/share/zsh/site-functions
+chmod u+w /usr/local/share/zsh /usr/local/share/zsh/site-functions
+reload_profile
 
 # Install Homebrew if not already installed
 if ! command -v brew &> /dev/null
@@ -376,6 +379,9 @@ brew install maestro
 
 echo "Installing Vysor..."
 brew install --cask vysor
+
+# Installing Azure Artifacts Credential Provider
+sh -c "$(curl -fsSL https://aka.ms/install-artifacts-credprovider.sh)"
 
 # Creating NuGet configuration
 create_nuget_config
