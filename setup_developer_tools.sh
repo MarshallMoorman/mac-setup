@@ -290,6 +290,36 @@ EOF
     fi
 }
 
+# Check and adjust permissions for Zsh if necessary
+check_and_adjust_zsh_permissions() {
+    local zsh_dir="/usr/local/share/zsh"
+    local zsh_site_functions="${zsh_dir}/site-functions"
+    local current_user=$(whoami)
+
+    # Check if the directories exist
+    if [ ! -d "$zsh_dir" ] || [ ! -d "$zsh_site_functions" ]; then
+        echo "Warning: Zsh directories not found at expected locations. Skipping permission adjustments."
+        return
+    fi
+
+    # Check ownership
+    local current_owner=$(stat -f "%Su" "$zsh_dir")
+    if [ "$current_owner" != "$current_user" ]; then
+        echo "Changing ownership of Zsh directories to $current_user..."
+        sudo chown -R "$current_user" "$zsh_dir" "$zsh_site_functions"
+    else
+        echo "Zsh directories are already owned by $current_user."
+    fi
+
+    # Check write permissions
+    if [ ! -w "$zsh_dir" ] || [ ! -w "$zsh_site_functions" ]; then
+        echo "Adding write permissions to Zsh directories..."
+        chmod u+w "$zsh_dir" "$zsh_site_functions"
+    else
+        echo "Zsh directories already have write permissions."
+    fi
+}
+
 reload_profile() {
     # Reload the profile
     source "$profile_file"
@@ -300,8 +330,7 @@ arch_name="$(uname -m)"
 
 # Load the profile variables
 manage_profile
-sudo chown -R mmoorman /usr/local/share/zsh /usr/local/share/zsh/site-functions
-chmod u+w /usr/local/share/zsh /usr/local/share/zsh/site-functions
+check_and_adjust_zsh_permissions
 reload_profile
 
 # Install Homebrew if not already installed
