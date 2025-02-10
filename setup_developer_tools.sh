@@ -22,8 +22,12 @@ manage_profile() {
         echo "Creating $profile_file for your shell"
         touch "$profile_file"
     fi
+}
 
-    # Check if Homebrew is in PATH, if not, add it
+# Function to update profile for homebrew
+update_profile_for_homebrew() {
+    echo "" >> "$profile_file"
+    echo "# Initialize Homebrew" >> "$profile_file"
     if ! grep -q 'eval "$(/opt/homebrew/bin/brew shellenv)"' "$profile_file" && [ -d "/opt/homebrew/bin" ]; then
         echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$profile_file"
         echo "Added Homebrew to PATH in $profile_file"
@@ -33,35 +37,6 @@ manage_profile() {
     else
         echo "Homebrew is already configured in the PATH."
     fi
-}
-
-# Function to update profile for nvm
-update_profile_for_nvm() {
-    echo "" >> "$profile_file"
-    echo "# Initialize NVM" >> "$profile_file"
-    if ! grep -q 'export NVM_DIR="$HOME/.nvm"' "$profile_file"; then
-        echo 'export NVM_DIR="$HOME/.nvm"' >> "$profile_file"
-        echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm' >> "$profile_file"
-        echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion' >> "$profile_file"
-        echo "Added NVM setup to $profile_file"
-
-        reload_profile
-    else
-        echo "NVM setup is already in the profile."
-    fi
-}
-
-# Function to update profile for asdf
-update_profile_for_asdf() {
-    echo "" >> "$profile_file"
-    echo "# Initialize ASDF for Ruby" >> "$profile_file"
-    if ! grep -q '/opt/homebrew/opt/asdf/libexec/asdf.sh' "$profile_file"; then
-        echo '. /opt/homebrew/opt/asdf/libexec/asdf.sh' >> "$profile_file"
-
-        reload_profile
-    fi
-
-    echo "Added asdf setup to $profile_file"
 }
 
 # Function to update profile for pyenv
@@ -82,6 +57,7 @@ update_profile_for_pyenv() {
 
 # Function to update profile for jenv
 update_profile_for_jenv() {
+    echo "" >> "$profile_file"
     echo "# Initialize JENV" >> "$profile_file"
     if ! grep -q 'export PATH="$HOME/.jenv/shims:${PATH}"' "$profile_file"; then
         echo 'eval export PATH="$HOME/.jenv/shims:${PATH}"' >> "$profile_file"
@@ -172,6 +148,18 @@ update_profile_for_dotnet() {
     fi
 }
 
+# Update profile for rbenv
+update_profile_for_rbenv() {
+    echo "# rbenv settings" >> "$profile_file"
+    if ! grep -q 'eval "$(rbenv init -)"' "$profile_file"; then
+        echo 'eval "$(rbenv init -)"' >> "$profile_file"
+        echo "Added rbenv setup to $profile_file"
+        reload_profile
+    else
+        echo "rbenv setup is already in the profile."
+    fi
+}
+
 # Function to find JDK version
 find_jdk_version() {
     local jdk_dir=$1
@@ -227,10 +215,91 @@ EOF
     fi
 }
 
+# Creating npm configuration file
+create_npm_config() {
+    local npm_config_file="$HOME/.npmrc"
+    if [ ! -f "$npm_config_file" ]; then
+        echo "Creating npm configuration file..."
+        cat << EOF > "$npm_config_file"
+registry=https://registry.npmjs.org/
+always-auth=true
+@elevate:registry=https://pkgs.dev.azure.com/elevate-apps/Elevate/_packaging/Elevate/npm/registry
+EOF
+        echo "NPM configuration file created at $npm_config_file"
+    else
+        echo "NPM configuration file already exists at $npm_config_file"
+    fi
+}
+
+# Creating Maven configuration file
+create_maven_config() {
+    local maven_config_dir="$HOME/.m2"
+    local maven_config_file="$maven_config_dir/settings.xml"
+    
+    if [ ! -d "$maven_config_dir" ]; then
+        mkdir -p "$maven_config_dir"
+    fi
+
+    if [ ! -f "$maven_config_file" ]; then
+        echo "Creating Maven configuration file..."
+        cat << EOF > "$maven_config_file"
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>maven-central</id>
+      <name>Maven Central Mirror</name>
+      <url>https://repo1.maven.org/maven2/</url>
+      <mirrorOf>central</mirrorOf>
+    </mirror>
+  </mirrors>
+  <servers>
+    <server>
+      <id>Elevate</id>
+      <username>elevate-apps</username>
+      <password>[PERSONAL_ACCESS_TOKEN]</password>
+    </server>
+  </servers>
+  <profiles>
+    <profile>
+      <id>custom-repos</id>
+      <repositories>
+        <repository>
+          <id>Elevate</id>
+          <url>https://pkgs.dev.azure.com/elevate-apps/Elevate/_packaging/Elevate/maven/v1</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>custom-repos</activeProfile>
+  </activeProfiles>
+</settings>
+EOF
+        echo "Maven configuration file created at $maven_config_file"
+    else
+        echo "Maven configuration file already exists at $maven_config_file"
+    fi
+}
+
 reload_profile() {
     # Reload the profile
     source "$profile_file"
 }
+
+# Determine the architecture
+arch_name="$(uname -m)"
+
+# Load the profile variables
+manage_profile
 
 # Install Homebrew if not already installed
 if ! command -v brew &> /dev/null
@@ -239,7 +308,7 @@ then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     
     echo "Updating shell profile..."
-    manage_profile
+    update_profile_for_homebrew
 else
     echo "Homebrew is already installed."
 fi
@@ -254,8 +323,6 @@ brew upgrade
 echo "Installing Node Version Manager (nvm)..."
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.2/install.sh | bash
 
-# Update profile for nvm
-update_profile_for_nvm
 reload_profile
 
 # Install the latest Node.js version
@@ -271,17 +338,8 @@ brew install --cask visual-studio-code
 echo "Installing Android Platform Tools..."
 brew install android-platform-tools
 
-echo "Installing asdf..."
-brew install asdf@0.16.0
-
-# Update profile for asdf
-update_profile_for_asdf
-
 echo "Installing Watchman..."
 brew install watchman
-
-echo "Installing JDK 8..."
-brew install zulu@8
 
 echo "Installing JDK 11..."
 brew install zulu@11
@@ -297,6 +355,68 @@ brew install --cask git-credential-manager-core
 
 echo "Installing Azure CLI..."
 brew install azure-cli
+
+echo "Installing Zoom..."
+brew install --cask zoom
+
+echo "Installing Postman..."
+brew install --cask postman
+
+echo "Installing Fastlane..."
+brew install fastlane
+
+echo "Installing Android Studio..."
+brew install --cask android-studio
+
+echo "Tapping mobile-dev-inc/tap..."
+brew tap mobile-dev-inc/tap
+
+echo "Installing Maestro..."
+brew install maestro
+
+echo "Installing Vysor..."
+brew install --cask vysor
+
+# Creating NuGet configuration
+create_nuget_config
+
+# Creating NPM configuration
+create_npm_config
+
+# Creating Maven configuration
+create_maven_config
+
+# Install Maven
+echo "Installing Maven..."
+brew install maven
+
+# Install rbenv
+echo "Installing rbenv..."
+brew install rbenv
+
+# Update profile for rbenv
+update_profile_for_rbenv
+reload_profile
+
+# Install Ruby versions with rbenv
+echo "Installing Ruby 2.6.10..."
+rbenv install 2.6.10
+
+# Find the latest Ruby version available
+latest_ruby=$(rbenv install -l | grep -E '^[0-9]' | tail -1 | tr -d ' ')
+
+echo "Installing latest Ruby ($latest_ruby)..."
+rbenv install "$latest_ruby"
+
+# Set global Ruby version to the latest installed
+echo "Setting global Ruby to the latest version ($latest_ruby)..."
+rbenv global "$latest_ruby"
+
+# Install Cocoapods for the latest Ruby
+echo "Switching to latest Ruby ($latest_ruby)..."
+rbenv shell "$latest_ruby"
+echo "Installing Cocoapods version 1.16.2..."
+gem install cocoapods -v 1.16.2
 
 echo "Installing pyenv..."
 brew install pyenv
@@ -319,15 +439,7 @@ update_profile_for_jenv
 # Refresh JEnv plugins
 jenv refresh-plugins
 
-# Add JDKs to jenv with error handling and directory creation
-echo "Adding JDK 8 to jenv..."
-jdk8_path="/Library/Java/JavaVirtualMachines/zulu-8.jdk/Contents/Home"
-jdk8_version=$(find_jdk_version "$jdk8_path")
-ensure_jenv_version_dir "$jdk8_version"
-if ! jenv add "$jdk8_path"; then
-    echo "Failed to add JDK 8 to jenv. Continuing with script..."
-fi
-
+# Add JDK 11 to jenv with error handling and directory creation
 echo "Adding JDK 11 to jenv..."
 jdk11_path="/Library/Java/JavaVirtualMachines/zulu-11.jdk/Contents/Home"
 jdk11_version=$(find_jdk_version "$jdk11_path")
@@ -335,16 +447,6 @@ ensure_jenv_version_dir "$jdk11_version"
 if ! jenv add "$jdk11_path"; then
     echo "Failed to add JDK 11 to jenv. Continuing with script..."
 fi
-
-# Setup asdf for Ruby
-echo "Adding Ruby plugin to asdf..."
-asdf plugin add ruby https://github.com/asdf-vm/asdf-ruby.git
-
-echo "Installing Ruby 2.7.5 with asdf..."
-asdf install ruby 2.7.5
-
-echo "Installing the latest Ruby version with asdf..."
-asdf install ruby latest
 
 # Update profile for history settings
 update_profile_for_history
@@ -361,13 +463,13 @@ if ! [ -f "$dotnet_install_script" ]; then
     chmod +x "$dotnet_install_script"
 fi
 
-echo "Installing .NET 6.0.36..."
+echo "Installing .NET 6.0.428..."
 bash "$dotnet_install_script" -Version 6.0.428
 
-echo "Installing .NET 7.0.20..."
+echo "Installing .NET 7.0.410..."
 bash "$dotnet_install_script" -Version 7.0.410
 
-echo "Installing .NET 8.0.12..."
+echo "Installing .NET 8.0.405..."
 bash "$dotnet_install_script" -Version 8.0.405
 
 # Update PATH for .NET
@@ -376,8 +478,17 @@ update_profile_for_dotnet
 # Reload the profile at the end
 reload_profile
 
-# Add this function call after installing .NET and setting up the PATH
-create_nuget_config
+echo "Setting default global ruby version to 2.6.10..."
+rbenv global 2.6.10
+
+echo "Setting default global python version to 2.7.18 and 3.13.0..."
+pyenv global 2.7.18 3.13.0
+
+echo "Setting default global node version to latest..."
+nvm alias default node
+
+echo "Setting default global jdk version to $jdk11_version..."
+jenv global "$jdk11_version"
 
 echo "Reload your profile with the following command..."
 echo "source $profile_file"
